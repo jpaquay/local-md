@@ -16,7 +16,7 @@ echo "================================================================="
 echo "🚀 Starting Local Markdown Explorer"
 echo "   Root Directory  : ${DEV_ROOT}"
 echo "   Server Port     : ${PORT}"
-echo "   Cloudtop URL    : http://c.net.dev:${PORT}"
+echo "   Cloudtop URL    : http://sh.net.dev:${PORT}"
 echo "================================================================="
 
 # Activate virtualenv if present
