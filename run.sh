@@ -10,13 +10,13 @@ cd "${SCRIPT_DIR}"
 
 PORT="${PORT:-8000}"
 HOST="${HOST:-0.0.0.0}"
-DEV_ROOT="${DEV_ROOT:-/usr/local/google/home/jpaquay/dev}"
+DEV_ROOT="${DEV_ROOT:-/home/dev}"
 
 echo "================================================================="
 echo "🚀 Starting Local Markdown Explorer"
 echo "   Root Directory  : ${DEV_ROOT}"
 echo "   Server Port     : ${PORT}"
-echo "   Cloudtop URL    : http://netdev.c.googlers.com:${PORT}"
+echo "   Cloudtop URL    : http://c.net.dev:${PORT}"
 echo "================================================================="
 
 # Activate virtualenv if present
