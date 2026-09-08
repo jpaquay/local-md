@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # ==============================================================================
-# Local Markdown & Dev Directory Explorer Launcher
+# Local Markdown & Directory Explorer Launcher
 # ==============================================================================
 
 set -e
@@ -25,13 +25,13 @@ cd "${SCRIPT_DIR}"
 
 PORT="${PORT:-8000}"
 HOST="${HOST:-0.0.0.0}"
-DEV_ROOT="${DEV_ROOT:-/home/dev}"
+ROOT_DIR="${ROOT_DIR:-${DOCS_ROOT:-${DEV_ROOT:-${HOME}}}}"
 
 echo "================================================================="
 echo "🚀 Starting Local Markdown Explorer"
-echo "   Root Directory  : ${DEV_ROOT}"
+echo "   Active Root     : ${ROOT_DIR}"
 echo "   Server Port     : ${PORT}"
-echo "   Cloudtop URL    : http://sh.net.dev:${PORT}"
+echo "   Access URL      : http://localhost:${PORT}"
 echo "================================================================="
 
 # Activate virtualenv if present
@@ -46,8 +46,8 @@ if [ ! -d "dist" ]; then
 fi
 
 # Start FastAPI server
-export DEV_ROOT="${DEV_ROOT}"
+export ROOT_DIR="${ROOT_DIR}"
 export PORT="${PORT}"
 export HOST="${HOST}"
 
-exec python3 server.py
+exec python3 server.py --root="${ROOT_DIR}" --port="${PORT}" --host="${HOST}"

@@ -13,30 +13,34 @@
 # limitations under the License.
 
 """
-FastAPI Server for Local Markdown & Dev Folder Explorer.
+FastAPI Server for Local Markdown & Directory Explorer.
 Serves directory navigation, search, file metadata, and the built Vite React GUI.
+Features dynamically configurable root directory defaulting to Home (~/).
 """
 
 import os
 import re
 import json
 import time
+import argparse
 import mimetypes
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Body
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import uvicorn
 
-# Base root directory to browse
-DEV_ROOT = Path(os.environ.get("DEV_ROOT", "/usr/local/google/home/jpaquay/dev")).resolve()
+# Global Configurable Root Directory - Default to user home (~/)
+DEFAULT_ROOT = Path(os.environ.get("ROOT_DIR", os.environ.get("DOCS_ROOT", os.environ.get("DEV_ROOT", str(Path.home()))))).expanduser().resolve()
+CURRENT_ROOT: Path = DEFAULT_ROOT
 DIST_DIR = Path(__file__).parent / "dist"
 
-app = FastAPI(title="Local Markdown & Dev Folder Explorer", version="1.0.0")
+app = FastAPI(title="Local Markdown Explorer", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,23 +51,40 @@ app.add_middleware(
 )
 
 # Directories to ignore during recursive search or heavy browsing
-IGNORED_DIRS = {".git", "node_modules", ".venv", "__pycache__", ".cache", ".next", ".turbo", "dist", "build"}
+IGNORED_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".cache", ".next", ".turbo", "dist", "build", ".npm", ".config"}
 MD_EXTENSIONS = {".md", ".markdown", ".lab.md", ".lab"}
 
-def safe_resolve(rel_path: str) -> Path:
-    """Resolves and validates that a relative path stays within DEV_ROOT."""
-    clean = rel_path.strip().lstrip("/")
-    target = (DEV_ROOT / clean).resolve()
+class SetRootRequest(BaseModel):
+    root_path: str
+
+def get_home_dir() -> Path:
+    return Path.home().resolve()
+
+def get_display_path(p: Path) -> str:
+    """Formats path for UI display, replacing user home with ~ to avoid PII."""
+    home = get_home_dir()
     try:
-        target.relative_to(DEV_ROOT)
+        rel = p.relative_to(home)
+        return f"~/{rel}" if str(rel) != "." else "~"
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied: path outside root directory")
+        return str(p)
+
+def safe_resolve(rel_path: str) -> Path:
+    """Resolves and validates that a relative path stays within CURRENT_ROOT."""
+    global CURRENT_ROOT
+    clean = rel_path.strip().lstrip("/")
+    target = (CURRENT_ROOT / clean).resolve()
+    try:
+        target.relative_to(CURRENT_ROOT)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied: path outside active root directory")
     return target
 
 def get_rel_path(p: Path) -> str:
-    """Returns path relative to DEV_ROOT."""
+    """Returns path relative to CURRENT_ROOT."""
+    global CURRENT_ROOT
     try:
-        return str(p.relative_to(DEV_ROOT))
+        return str(p.relative_to(CURRENT_ROOT))
     except ValueError:
         return p.name
 
@@ -85,7 +106,6 @@ def extract_toc(content: str) -> List[Dict[str, Any]]:
         if match:
             level = len(match.group(1))
             raw_title = match.group(2).strip()
-            # Clean title of markdown formatting for slug
             clean_title = re.sub(r"[\[\]`*_{}]", "", raw_title)
             slug = re.sub(r"[^\w\s-]", "", clean_title.lower()).strip().replace(" ", "-")
             toc.append({
@@ -115,10 +135,55 @@ def parse_frontmatter(content: str) -> tuple[Dict[str, Any], str]:
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "root": str(DEV_ROOT), "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {
+        "status": "ok", 
+        "root": get_display_path(CURRENT_ROOT), 
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+@app.get("/api/config")
+def get_config():
+    """Returns current active root folder configuration."""
+    home = get_home_dir()
+    dev_candidate = (home / "dev").resolve()
+    
+    quick_roots = [
+        {"name": "Home (~)", "path": str(home), "display": "~"},
+    ]
+    if dev_candidate.exists() and dev_candidate.is_dir():
+        quick_roots.append({"name": "Dev Folder (~/dev)", "path": str(dev_candidate), "display": "~/dev"})
+
+    return {
+        "current_root": str(CURRENT_ROOT),
+        "display_root": get_display_path(CURRENT_ROOT),
+        "home_dir": str(home),
+        "quick_roots": quick_roots
+    }
+
+@app.post("/api/config/root")
+def set_root(req: SetRootRequest):
+    """Updates the active root directory dynamically."""
+    global CURRENT_ROOT
+    raw_path = req.root_path.strip()
+    if raw_path.startswith("~"):
+        target = Path(raw_path.replace("~", str(get_home_dir()), 1)).resolve()
+    else:
+        target = Path(raw_path).resolve()
+        
+    if not target.exists():
+        raise HTTPException(status_code=404, detail=f"Target directory does not exist: {raw_path}")
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail=f"Target path is a file, not a directory: {raw_path}")
+        
+    CURRENT_ROOT = target
+    return {
+        "status": "success",
+        "current_root": str(CURRENT_ROOT),
+        "display_root": get_display_path(CURRENT_ROOT)
+    }
 
 @app.get("/api/browse")
-def browse_directory(path: str = Query("", description="Relative path from DEV_ROOT")):
+def browse_directory(path: str = Query("", description="Relative path from active root")):
     """Returns directory listing for the given relative path."""
     target_dir = safe_resolve(path)
     
@@ -132,28 +197,29 @@ def browse_directory(path: str = Query("", description="Relative path from DEV_R
         with os.scandir(target_dir) as entries:
             for entry in entries:
                 if entry.name in IGNORED_DIRS and entry.name.startswith("."):
-                    # show hidden dotfiles except heavy internal ones
-                    pass
+                    continue
                 
-                is_directory = entry.is_dir(follow_symlinks=False)
-                entry_path = Path(entry.path)
-                rel = get_rel_path(entry_path)
-                ext = entry_path.suffix.lower()
-                
-                # Check for compound extensions like .lab.md
-                if entry.name.endswith(".lab.md"):
-                    ext = ".lab.md"
+                try:
+                    is_directory = entry.is_dir(follow_symlinks=False)
+                    entry_path = Path(entry.path)
+                    rel = get_rel_path(entry_path)
+                    ext = entry_path.suffix.lower()
+                    
+                    if entry.name.endswith(".lab.md"):
+                        ext = ".lab.md"
 
-                stat = entry.stat()
-                items.append({
-                    "name": entry.name,
-                    "path": rel,
-                    "is_dir": is_directory,
-                    "extension": ext if not is_directory else None,
-                    "is_markdown": ext in MD_EXTENSIONS,
-                    "size_bytes": stat.st_size if not is_directory else None,
-                    "modified_time": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
-                })
+                    stat = entry.stat(follow_symlinks=False)
+                    items.append({
+                        "name": entry.name,
+                        "path": rel,
+                        "is_dir": is_directory,
+                        "extension": ext if not is_directory else None,
+                        "is_markdown": ext in MD_EXTENSIONS,
+                        "size_bytes": stat.st_size if not is_directory else None,
+                        "modified_time": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                    })
+                except (PermissionError, FileNotFoundError):
+                    continue
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied reading directory")
 
@@ -168,10 +234,11 @@ def browse_directory(path: str = Query("", description="Relative path from DEV_R
     items.sort(key=sort_key)
     
     rel_current = get_rel_path(target_dir)
-    parent_rel = get_rel_path(target_dir.parent) if target_dir != DEV_ROOT else None
+    parent_rel = get_rel_path(target_dir.parent) if target_dir != CURRENT_ROOT else None
 
-    # Calculate breadcrumb components
-    breadcrumbs = [{"name": "dev", "path": ""}]
+    # Calculate breadcrumbs
+    root_label = get_display_path(CURRENT_ROOT)
+    breadcrumbs = [{"name": root_label, "path": ""}]
     if rel_current and rel_current != ".":
         accum = ""
         for seg in rel_current.split(os.sep):
@@ -181,7 +248,8 @@ def browse_directory(path: str = Query("", description="Relative path from DEV_R
     return {
         "current_path": rel_current if rel_current != "." else "",
         "parent_path": parent_rel if parent_rel != "." else "",
-        "is_root": target_dir == DEV_ROOT,
+        "is_root": target_dir == CURRENT_ROOT,
+        "root_display": root_label,
         "breadcrumbs": breadcrumbs,
         "items": items,
         "total_count": len(items),
@@ -214,7 +282,8 @@ def get_file_content(path: str = Query(..., description="Relative path of file")
     if target_file.name.endswith(".lab.md"):
         ext = ".lab.md"
 
-    breadcrumbs = [{"name": "dev", "path": ""}]
+    root_label = get_display_path(CURRENT_ROOT)
+    breadcrumbs = [{"name": root_label, "path": ""}]
     accum = ""
     for seg in rel_p.split(os.sep):
         accum = f"{accum}/{seg}" if accum else seg
@@ -242,12 +311,11 @@ def search_files(
     ext_filter: Optional[str] = Query("md", description="Filter by extension (md, all)"),
     max_results: int = Query(30, le=100)
 ):
-    """Full-text and filename search across files in DEV_ROOT."""
+    """Full-text and filename search across files in CURRENT_ROOT."""
     query = q.lower()
     results = []
     
-    for root, dirs, files in os.walk(DEV_ROOT):
-        # Prune ignored directories in-place
+    for root, dirs, files in os.walk(CURRENT_ROOT):
         dirs[:] = [d for d in dirs if d not in IGNORED_DIRS and not d.startswith(".")]
         
         for file in files:
@@ -257,17 +325,14 @@ def search_files(
             file_path = Path(root) / file
             f_ext = file_path.suffix.lower()
             
-            if ext_filter == "md" and f_ext not in MD_EXTENSIONS:
+            if ext_filter == "md" and f_ext not in MD_EXTENSIONS and not file.endswith(".lab.md"):
                 continue
                 
             rel = get_rel_path(file_path)
-            
-            # Check filename match
             file_match = query in file.lower() or query in rel.lower()
             matched_snippets = []
             
             try:
-                # Limit content scan to first 250KB for speed
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     for line_idx, line in enumerate(f, 1):
                         if query in line.lower():
@@ -296,18 +361,19 @@ def search_files(
 
     return {
         "query": q,
+        "root": get_display_path(CURRENT_ROOT),
         "total_matches": len(results),
         "results": results
     }
 
 @app.get("/api/stats")
 def get_stats():
-    """Returns repository stats for markdown documentation."""
+    """Returns repository stats for markdown documentation in active root."""
     total_md = 0
     total_dirs = 0
     recent_files = []
     
-    for root, dirs, files in os.walk(DEV_ROOT):
+    for root, dirs, files in os.walk(CURRENT_ROOT):
         dirs[:] = [d for d in dirs if d not in IGNORED_DIRS and not d.startswith(".")]
         total_dirs += len(dirs)
         for f in files:
@@ -337,7 +403,7 @@ def get_stats():
     ]
 
     return {
-        "root": str(DEV_ROOT),
+        "root": get_display_path(CURRENT_ROOT),
         "total_markdown_files": total_md,
         "total_directories": total_dirs,
         "recent_files": top_recent
@@ -367,14 +433,18 @@ else:
             <h1>🚀 Local Markdown Explorer API Ready</h1>
             <p>FastAPI backend is running! To compile and launch the Vite React UI, run:</p>
             <pre><code>npm run build</code></pre>
-            <p>API endpoints available at <a style="color:#a6e3a1" href="/api/stats">/api/stats</a>, <a style="color:#a6e3a1" href="/api/browse">/api/browse</a>, and <a style="color:#a6e3a1" href="/api/search?q=elevate">/api/search</a>.</p>
             </body>
             </html>"""
         )
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    host = os.environ.get("HOST", "0.0.0.0")
-    print(f"🌟 Starting Local Markdown Explorer server on http://{host}:{port}")
-    print(f"📁 Browsing Root Directory: {DEV_ROOT}")
-    uvicorn.run("server:app", host=host, port=port, reload=True)
+    parser = argparse.ArgumentParser(description="Local Markdown Explorer Server")
+    parser.add_argument("--root", type=str, default=str(DEFAULT_ROOT), help="Root directory to browse (default: ~/)")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)), help="Port to listen on (default: 8000)")
+    parser.add_argument("--host", type=str, default=os.environ.get("HOST", "0.0.0.0"), help="Host to bind (default: 0.0.0.0)")
+    args = parser.parse_args()
+
+    CURRENT_ROOT = Path(args.root).expanduser().resolve()
+    print(f"🌟 Starting Local Markdown Explorer server on http://{args.host}:{args.port}")
+    print(f"📁 Active Root Directory: {CURRENT_ROOT} ({get_display_path(CURRENT_ROOT)})")
+    uvicorn.run(app, host=args.host, port=args.port)

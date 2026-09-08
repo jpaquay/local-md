@@ -20,9 +20,10 @@ import { Header } from './components/Header';
 import { MarkdownViewer } from './components/MarkdownViewer';
 import { TableOfContents } from './components/TableOfContents';
 import { SearchModal } from './components/SearchModal';
+import { RootConfigModal } from './components/RootConfigModal';
 import { apiService } from './services/api';
-import { FileData, StatsResponse } from './types';
-import { BookOpen, FolderTree, Compass, Sparkles, ArrowRight, FileText } from 'lucide-react';
+import { FileData, StatsResponse, ConfigResponse } from './types';
+import { BookOpen, Sparkles, ArrowRight, FileText } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState<string>('');
@@ -32,10 +33,14 @@ export const App: React.FC = () => {
   const [isRawMode, setIsRawMode] = useState<boolean>(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
+  const [isRootConfigOpen, setIsRootConfigOpen] = useState<boolean>(false);
   const [bookmarks, setBookmarks] = useState<string[]>([]);
   const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [config, setConfig] = useState<ConfigResponse | null>(null);
+  const [displayRoot, setDisplayRoot] = useState<string>('~');
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
-  // Load bookmarks & theme from localStorage
+  // Load config, bookmarks & theme from localStorage
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem('local_md_theme') as 'dark' | 'light';
@@ -49,31 +54,20 @@ export const App: React.FC = () => {
       console.error(e);
     }
 
-    // Load initial stats & recent files
+    // Load initial config and stats
+    apiService.getConfig().then(cfg => {
+      setConfig(cfg);
+      setDisplayRoot(cfg.display_root);
+    }).catch(console.error);
+
     apiService.getStats().then(setStats).catch(console.error);
 
-    // Initial check if hash contains a file path e.g. #github-cloud-gtm/README.md
+    // Initial check if hash contains a file path
     const hash = window.location.hash.replace(/^#/, '');
     if (hash) {
       handleSelectFile(decodeURIComponent(hash));
-    } else {
-      // Default to opening elevate-solution-guides/README.md if available
-      apiService.getFile('github-cloud-gtm/elevate-solution-guides/README.md')
-        .then(data => {
-          setFileData(data);
-          setSelectedFilePath('github-cloud-gtm/elevate-solution-guides/README.md');
-        })
-        .catch(() => {
-          // fallback to root README
-          apiService.getFile('github-cloud-gtm/README.md')
-            .then(data => {
-              setFileData(data);
-              setSelectedFilePath('github-cloud-gtm/README.md');
-            })
-            .catch(() => {});
-        });
     }
-  }, []);
+  }, [refreshTrigger]);
 
   // Global Keyboard Shortcuts (Cmd+K / Ctrl+K)
   useEffect(() => {
@@ -116,7 +110,6 @@ export const App: React.FC = () => {
       const data = await apiService.getFile(path);
       setFileData(data);
 
-      // Save to recent files
       try {
         const stored = localStorage.getItem('local_md_recents');
         const recents: string[] = stored ? JSON.parse(stored) : [];
@@ -136,23 +129,35 @@ export const App: React.FC = () => {
     setCurrentPath(path);
   };
 
+  const handleRootChanged = (newDisplayRoot: string) => {
+    setDisplayRoot(newDisplayRoot);
+    setCurrentPath('');
+    setSelectedFilePath(null);
+    setFileData(null);
+    window.location.hash = '';
+    setRefreshTrigger(prev => prev + 1);
+  };
+
   return (
     <div className="app-container">
       {/* Left Sidebar Directory Explorer */}
       <Sidebar
         currentPath={currentPath}
         selectedFile={selectedFilePath}
+        displayRoot={displayRoot}
         onSelectFile={handleSelectFile}
         onNavigateFolder={handleNavigateFolder}
         onOpenSearch={() => setIsSearchOpen(true)}
+        onOpenRootConfig={() => setIsRootConfigOpen(true)}
         bookmarks={bookmarks}
         onToggleBookmark={handleToggleBookmark}
+        refreshTrigger={refreshTrigger}
       />
 
       {/* Main Content Workspace */}
       <main className="main-wrapper">
         <Header
-          breadcrumbs={fileData?.breadcrumbs || [{ name: 'dev', path: '' }]}
+          breadcrumbs={fileData?.breadcrumbs || [{ name: displayRoot, path: '' }]}
           fileData={fileData}
           onNavigateFolder={handleNavigateFolder}
           isRawMode={isRawMode}
@@ -184,7 +189,7 @@ export const App: React.FC = () => {
                   <BookOpen size={48} style={{ color: 'var(--accent-primary)', marginBottom: '14px' }} />
                   <h1 style={{ fontSize: '26px', fontWeight: 700, marginBottom: '8px' }}>Local Markdown Explorer</h1>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '15px' }}>
-                    Browse, render, and search all Markdown documentation and Codelabs across <code>/usr/local/google/home/jpaquay/dev/</code>
+                    Browse, render, and search all Markdown documentation and Codelabs across <code>{displayRoot}</code>
                   </p>
                 </div>
 
@@ -221,6 +226,14 @@ export const App: React.FC = () => {
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         onSelectResult={handleSelectFile}
+      />
+
+      {/* Root Configuration Modal */}
+      <RootConfigModal
+        isOpen={isRootConfigOpen}
+        onClose={() => setIsRootConfigOpen(false)}
+        config={config}
+        onRootChanged={handleRootChanged}
       />
     </div>
   );

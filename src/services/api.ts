@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { BrowseResponse, FileData, SearchResponse, StatsResponse } from '../types';
+import { BrowseResponse, FileData, SearchResponse, StatsResponse, ConfigResponse } from '../types';
 
 const API_BASE = '/api';
 
@@ -47,6 +47,27 @@ export const apiService = {
     const res = await fetch(`${API_BASE}/stats`);
     if (!res.ok) {
       throw new Error(`Failed to fetch stats: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async getConfig(): Promise<ConfigResponse> {
+    const res = await fetch(`${API_BASE}/config`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch config: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async setRoot(rootPath: string): Promise<{ status: string; current_root: string; display_root: string }> {
+    const res = await fetch(`${API_BASE}/config/root`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root_path: rootPath }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `Failed to change root directory`);
     }
     return res.json();
   }

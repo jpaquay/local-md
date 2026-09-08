@@ -33,6 +33,7 @@ export interface BrowseResponse {
   current_path: string;
   parent_path: string | null;
   is_root: boolean;
+  root_display: string;
   breadcrumbs: Breadcrumb[];
   items: DirectoryItem[];
   total_count: number;
@@ -77,6 +78,7 @@ export interface SearchResult {
 
 export interface SearchResponse {
   query: string;
+  root: string;
   total_matches: number;
   results: SearchResult[];
 }
@@ -91,4 +93,17 @@ export interface StatsResponse {
     size: number;
     modified_time: string;
   }[];
+}
+
+export interface QuickRoot {
+  name: string;
+  path: string;
+  display: string;
+}
+
+export interface ConfigResponse {
+  current_root: string;
+  display_root: string;
+  home_dir: string;
+  quick_roots: QuickRoot[];
 }
