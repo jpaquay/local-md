@@ -71,7 +71,6 @@ def get_display_path(p: Path) -> str:
 
 def safe_resolve(rel_path: str) -> Path:
     """Resolves and validates that a relative path stays within CURRENT_ROOT."""
-    global CURRENT_ROOT
     clean = rel_path.strip().lstrip("/")
     target = (CURRENT_ROOT / clean).resolve()
     try:
@@ -82,7 +81,6 @@ def safe_resolve(rel_path: str) -> Path:
 
 def get_rel_path(p: Path) -> str:
     """Returns path relative to CURRENT_ROOT."""
-    global CURRENT_ROOT
     try:
         return str(p.relative_to(CURRENT_ROOT))
     except ValueError:
