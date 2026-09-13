@@ -71,7 +71,6 @@ def get_display_path(p: Path) -> str:
 
 def safe_resolve(rel_path: str) -> Path:
     """Resolves and validates that a relative path stays within CURRENT_ROOT."""
-    global CURRENT_ROOT
     clean = rel_path.strip().lstrip("/")
     target = (CURRENT_ROOT / clean).resolve()
     try:
@@ -82,7 +81,6 @@ def safe_resolve(rel_path: str) -> Path:
 
 def get_rel_path(p: Path) -> str:
     """Returns path relative to CURRENT_ROOT."""
-    global CURRENT_ROOT
     try:
         return str(p.relative_to(CURRENT_ROOT))
     except ValueError:
@@ -415,7 +413,12 @@ if DIST_DIR.exists() and (DIST_DIR / "index.html").exists():
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        file_target = DIST_DIR / full_path
+        clean_path = full_path.lstrip("/")
+        file_target = (DIST_DIR / clean_path).resolve()
+        try:
+            file_target.relative_to(DIST_DIR.resolve())
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Access denied: path outside distribution directory")
         if file_target.exists() and file_target.is_file():
             return FileResponse(file_target)
         return FileResponse(DIST_DIR / "index.html")
