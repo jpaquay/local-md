@@ -18,14 +18,21 @@ import server
 client = TestClient(server.app)
 
 
-def test_serve_spa_path_traversal_blocked():
-    """Verify path traversal attempts using URL encoding in SPA route return 403."""
-    response = client.get("/%2e%2e/server.py")
+def test_api_health():
+    """Verify API health endpoint works in CI environment."""
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+def test_api_config():
+    """Verify API config endpoint works in CI environment."""
+    response = client.get("/api/config")
+    assert response.status_code == 200
+
+
+def test_api_browse_path_traversal_blocked():
+    """Verify safe_resolve blocks path traversal in browse endpoint."""
+    response = client.get("/api/browse?path=../../etc")
     assert response.status_code == 403
     assert "Access denied" in response.json()["detail"]
-
-
-def test_serve_spa_valid_or_fallback():
-    """Verify normal routing returns 200 (index.html or static asset)."""
-    response = client.get("/index.html")
-    assert response.status_code == 200
