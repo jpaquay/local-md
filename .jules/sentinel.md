@@ -1,0 +1,4 @@
+## 2026-09-13 - FastAPI Catch-All Route Path Traversal
+**Vulnerability:** In `server.py`, the SPA fallback catch-all route `@app.get("/{full_path:path}")` constructed file paths as `DIST_DIR / full_path` without resolving and verifying `relative_to(DIST_DIR)`. While Starlette normalizes raw dot-dot segments in path requests, URL-encoded path traversal sequences like `%2e%2e/` bypassed Starlette path normalization and allowed reading arbitrary server files outside `DIST_DIR`.
+**Learning:** Catch-all parameters with `:path` type in FastAPI/Starlette do not automatically restrict file resolution to static directories when `FileResponse` is used manually.
+**Prevention:** Always sanitize, `lstrip('/')`, and `.resolve()` incoming relative paths, validating `file_target.relative_to(base_dir)` before serving files via `FileResponse`.

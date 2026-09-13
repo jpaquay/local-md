@@ -415,7 +415,12 @@ if DIST_DIR.exists() and (DIST_DIR / "index.html").exists():
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        file_target = DIST_DIR / full_path
+        clean_path = full_path.lstrip("/")
+        file_target = (DIST_DIR / clean_path).resolve()
+        try:
+            file_target.relative_to(DIST_DIR.resolve())
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Access denied: path outside distribution directory")
         if file_target.exists() and file_target.is_file():
             return FileResponse(file_target)
         return FileResponse(DIST_DIR / "index.html")
