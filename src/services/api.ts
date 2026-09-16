@@ -16,11 +16,19 @@
 
 import { BrowseResponse, FileData, SearchResponse, StatsResponse, ConfigResponse } from '../types';
 
-const API_BASE = '/api';
+function getApiBase(): string {
+  const path = window.location.pathname;
+  const match = path.match(/^(\/port\/\d+)/);
+  if (match) {
+    return `${match[1]}/api`;
+  }
+  return './api';
+}
 
 export const apiService = {
-  async browse(path: string = ''): Promise<BrowseResponse> {
-    const res = await fetch(`${API_BASE}/browse?path=${encodeURIComponent(path)}`);
+  async browse(path: string = '', showHidden: boolean = false): Promise<BrowseResponse> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/browse?path=${encodeURIComponent(path)}&show_hidden=${showHidden}`);
     if (!res.ok) {
       throw new Error(`Failed to browse directory: ${res.statusText}`);
     }
@@ -28,7 +36,8 @@ export const apiService = {
   },
 
   async getFile(path: string): Promise<FileData> {
-    const res = await fetch(`${API_BASE}/file?path=${encodeURIComponent(path)}`);
+    const base = getApiBase();
+    const res = await fetch(`${base}/file?path=${encodeURIComponent(path)}`);
     if (!res.ok) {
       throw new Error(`Failed to load file: ${res.statusText}`);
     }
@@ -36,7 +45,8 @@ export const apiService = {
   },
 
   async search(query: string, extFilter: string = 'md'): Promise<SearchResponse> {
-    const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}&ext_filter=${extFilter}`);
+    const base = getApiBase();
+    const res = await fetch(`${base}/search?q=${encodeURIComponent(query)}&ext_filter=${extFilter}`);
     if (!res.ok) {
       throw new Error(`Search failed: ${res.statusText}`);
     }
@@ -44,7 +54,8 @@ export const apiService = {
   },
 
   async getStats(): Promise<StatsResponse> {
-    const res = await fetch(`${API_BASE}/stats`);
+    const base = getApiBase();
+    const res = await fetch(`${base}/stats`);
     if (!res.ok) {
       throw new Error(`Failed to fetch stats: ${res.statusText}`);
     }
@@ -52,22 +63,38 @@ export const apiService = {
   },
 
   async getConfig(): Promise<ConfigResponse> {
-    const res = await fetch(`${API_BASE}/config`);
+    const base = getApiBase();
+    const res = await fetch(`${base}/config`);
     if (!res.ok) {
       throw new Error(`Failed to fetch config: ${res.statusText}`);
     }
     return res.json();
   },
 
-  async setRoot(rootPath: string): Promise<{ status: string; current_root: string; display_root: string }> {
-    const res = await fetch(`${API_BASE}/config/root`, {
+  async setRoot(rootPath: string, pinAsDefault: boolean = false): Promise<{ status: string; current_root: string; display_root: string; is_locked?: boolean }> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/config/root`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ root_path: rootPath }),
+      body: JSON.stringify({ root_path: rootPath, pin_as_default: pinAsDefault }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(err.detail || `Failed to change root directory`);
+    }
+    return res.json();
+  },
+
+  async pinRootConfig(path: string, action: 'pin' | 'unpin' | 'set_default' | 'toggle_lock'): Promise<ConfigResponse> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/config/pin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, action }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `Failed to update pin configuration`);
     }
     return res.json();
   }

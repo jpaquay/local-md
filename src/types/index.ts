@@ -34,6 +34,7 @@ export interface BrowseResponse {
   parent_path: string | null;
   is_root: boolean;
   root_display: string;
+  show_hidden?: boolean;
   breadcrumbs: Breadcrumb[];
   items: DirectoryItem[];
   total_count: number;
@@ -99,11 +100,18 @@ export interface QuickRoot {
   name: string;
   path: string;
   display: string;
+  is_pinned?: boolean;
+  is_default?: boolean;
 }
 
 export interface ConfigResponse {
   current_root: string;
   display_root: string;
   home_dir: string;
+  default_root?: string;
+  is_pinned?: boolean;
+  is_default?: boolean;
+  is_locked?: boolean;
+  pinned_roots?: string[];
   quick_roots: QuickRoot[];
 }

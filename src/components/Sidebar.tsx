@@ -26,10 +26,12 @@ import {
   Clock, 
   Bookmark, 
   RefreshCw,
-  Settings,
-  FolderSync
+  FolderSync,
+  Eye,
+  EyeOff,
+  Pin
 } from 'lucide-react';
-import { DirectoryItem, BrowseResponse } from '../types';
+import { BrowseResponse } from '../types';
 import { apiService } from '../services/api';
 
 interface SidebarProps {
@@ -54,20 +56,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSearch,
   onOpenRootConfig,
   bookmarks,
-  onToggleBookmark,
   refreshTrigger,
 }) => {
   const [activeTab, setActiveTab] = useState<'files' | 'recents' | 'bookmarks'>('files');
   const [browseData, setBrowseData] = useState<BrowseResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [filterText, setFilterText] = useState<string>('');
+  const [showHidden, setShowHidden] = useState<boolean>(false);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [totalMdFiles, setTotalMdFiles] = useState<number>(0);
 
-  const loadDirectory = async (path: string) => {
+  const loadDirectory = async (path: string, hidden: boolean = showHidden) => {
     setLoading(true);
     try {
-      const data = await apiService.browse(path);
+      const data = await apiService.browse(path, hidden);
       setBrowseData(data);
     } catch (err) {
       console.error('Failed to browse directory:', err);
@@ -77,8 +79,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   useEffect(() => {
-    loadDirectory(currentPath);
-  }, [currentPath, refreshTrigger]);
+    loadDirectory(currentPath, showHidden);
+  }, [currentPath, showHidden, refreshTrigger]);
 
   useEffect(() => {
     apiService.getStats().then(stats => {
@@ -101,22 +103,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className="sidebar">
       {/* Brand Header */}
       <div className="sidebar-header">
-        <div className="brand-title">
-          <BookOpen size={18} style={{ color: 'var(--accent-primary)' }} />
-          <span>Local Markdown</span>
+        <div className="brand-title" style={{ overflow: 'hidden' }}>
+          <BookOpen size={18} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+          <span style={{ whiteSpace: 'nowrap' }}>Local Markdown</span>
           <span 
             className="brand-badge" 
             onClick={onOpenRootConfig} 
-            title="Click to change root folder"
-            style={{ cursor: 'pointer' }}
+            title="Click to configure or pin root directory"
+            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', maxWidth: '135px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
-            {displayRoot}
+            <Pin size={10} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayRoot}</span>
           </span>
         </div>
-        <div style={{ display: 'flex', gap: '4px' }}>
+        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
           <button 
             className="icon-btn" 
-            title="Configure Root Folder" 
+            title="Configure & Pin Root Directory" 
             onClick={onOpenRootConfig}
             style={{ padding: '5px 8px' }}
           >
@@ -125,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button 
             className="icon-btn" 
             title="Refresh directory" 
-            onClick={() => loadDirectory(currentPath)}
+            onClick={() => loadDirectory(currentPath, showHidden)}
             disabled={loading}
             style={{ padding: '5px 8px' }}
           >
@@ -168,14 +171,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Main Files Tab */}
       {activeTab === 'files' && (
         <>
-          <div style={{ padding: '8px 12px 0 12px' }}>
+          <div style={{ padding: '8px 12px 0 12px', display: 'flex', gap: '6px', alignItems: 'center' }}>
             <input 
               type="text" 
               placeholder="Filter current folder..." 
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               style={{
-                width: '100%',
+                flex: 1,
                 padding: '6px 10px',
                 background: 'var(--bg-tertiary)',
                 border: '1px solid var(--border-subtle)',
@@ -185,6 +188,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 outline: 'none'
               }}
             />
+            <button
+              className={`icon-btn ${showHidden ? 'active' : ''}`}
+              title={showHidden ? "Hide hidden dotfiles (e.g. .agents)" : "Show hidden dotfiles (e.g. .agents, .env.example)"}
+              onClick={() => setShowHidden(prev => !prev)}
+              style={{ padding: '6px 8px', flexShrink: 0 }}
+            >
+              {showHidden ? <Eye size={13} /> : <EyeOff size={13} />}
+            </button>
           </div>
 
           <div className="tree-container">

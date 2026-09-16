@@ -234,6 +234,7 @@ export const App: React.FC = () => {
         onClose={() => setIsRootConfigOpen(false)}
         config={config}
         onRootChanged={handleRootChanged}
+        onConfigUpdated={setConfig}
       />
     </div>
   );
