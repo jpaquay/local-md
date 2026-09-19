@@ -1,6 +1,34 @@
 # Local Markdown Explorer (`local-md`)
 
-A fast, single-page web GUI and presentation engine to browse, search, and render Markdown documents, Codelabs, and repository structures across any configurable directory tree. Designed for seamless operation behind **Zero-Trust Local Proxy Guard** on Cloudtop workstations and local dev environments.
+[![License: CC BY-SA 4.0](https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-sa/4.0/)
+[![Author: Jerome CG Paquay](https://img.shields.io/badge/Author-Jerome%20CG%20Paquay%20(%40jpaquay)-blue)](https://github.com/jpaquay)
+[![Frontend: React 19 + Vite](https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-61DAFB?logo=react)](https://react.dev/)
+[![Backend: Python FastAPI](https://img.shields.io/badge/Backend-FastAPI%20%2B%20Uvicorn-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Security: Zero-Trust Proxy Guard](https://img.shields.io/badge/Security-Zero--Trust%20Proxy%20Guard%20%2B%20Strict%20De--ID-success)](#%EF%B8%8F-cloudtop--zero-trust-proxy-guard-architecture)
+
+A fast, single-page web GUI and Codelab presentation engine to browse, search, and render Markdown documents, Codelabs, and repository structures across any configurable directory tree. Designed for seamless operation behind **Zero-Trust Local Proxy Guard** on Cloudtop workstations and local developer environments.
+
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart LR
+    User(["Authenticated Engineer / Browser"])
+    ProxyGuard["Local Proxy Guard / UberProxy Shield (:8000 / :8443)"]
+    SPA["React 19 + TypeScript + Vite SPA"]
+    Backend["Python FastAPI Backend (127.0.0.1:18000)"]
+    DeID["Strict De-ID Layer (~ / <user> / <cloudtop-host>)"]
+    FS[("Pinned & Locked Workspace Roots (.md / .lab.md)")]
+
+    User -- "HTTPS + UberProxy Signed Header" --> ProxyGuard
+    ProxyGuard -- "Serves Assets & Proxies /api" --> SPA
+    SPA -- "Relative REST API (./api)" --> Backend
+    Backend <--> DeID
+    Backend <--> FS
+```
+
+For a complete engineering, security, and hygiene review, see [docs/ARCHITECTURE_REVIEW.md](./docs/ARCHITECTURE_REVIEW.md).
 
 ---
 
@@ -91,3 +119,21 @@ When deployed alongside **Local Proxy Guard (`local-proxy-guard`)**:
 - `GET /api/file?path=...`: Returns file content, extracted TOC, frontmatter, and reading stats.
 - `GET /api/search?q=...`: Performs bounded-depth full-text and filename search across the active root.
 - `GET /api/stats`: Returns markdown file counts and recently modified documents.
+
+---
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Please review [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting pull requests.
+
+---
+
+## 👏 Credits & Author
+
+Designed, architected, and maintained by **Jerome CG Paquay (`@jpaquay`)** — [https://github.com/jpaquay](https://github.com/jpaquay).
+
+---
+
+## 📜 License
+
+This project is licensed under the **Creative Commons Attribution-ShareAlike 4.0 International License (`CC BY-SA 4.0`)** — Copyright © 2026 **Jerome CG Paquay (`@jpaquay`)**. See [LICENSE](./LICENSE) for full legal terms.
