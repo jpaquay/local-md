@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, Query, Request, Body
+from fastapi import FastAPI, HTTPException, Query, Request, Body, UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -595,6 +595,95 @@ def get_file_content(path: str = Query(..., description="Relative path of file")
         "toc": toc,
         "content": raw_text,
         "breadcrumbs": breadcrumbs,
+    }
+
+
+class DirectFileInput(BaseModel):
+    filename: str
+    content: str
+    target_dir: Optional[str] = ""
+
+
+@app.post("/api/upload")
+async def upload_markdown_file(
+    file: Optional[UploadFile] = File(None),
+    filename: Optional[str] = Form(None),
+    content: Optional[str] = Form(None),
+    target_dir: Optional[str] = Form(""),
+):
+    """
+    Interactively uploads or creates a new markdown file into the active workspace.
+    Supports multipart/form-data (file upload or form fields) and direct string input.
+    """
+    chosen_name = ""
+    file_bytes = b""
+
+    if file is not None and file.filename:
+        chosen_name = Path(file.filename).name
+        file_bytes = await file.read()
+    elif filename and content is not None:
+        chosen_name = Path(filename).name
+        file_bytes = content.encode("utf-8")
+    else:
+        raise HTTPException(status_code=400, detail="No file or content provided")
+
+    # Sanitize filename
+    clean_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', chosen_name)
+    if not clean_name:
+        clean_name = "untitled.md"
+    if not any(clean_name.lower().endswith(ext) for ext in [".md", ".markdown", ".txt", ".lab.md"]):
+        clean_name += ".md"
+
+    # Determine destination folder
+    base_folder = safe_resolve(target_dir or "")
+    if not base_folder.exists() or not base_folder.is_dir():
+        base_folder = CURRENT_ROOT
+
+    dest_file = base_folder / clean_name
+    try:
+        dest_file.write_bytes(file_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
+
+    rel_p = get_rel_path(dest_file)
+    return {
+        "status": "success",
+        "message": f"Successfully loaded {clean_name}",
+        "filename": clean_name,
+        "path": rel_p,
+        "display_path": deid_path(dest_file),
+        "size_bytes": len(file_bytes),
+    }
+
+
+@app.post("/api/file/create")
+def create_file_json(input_data: DirectFileInput):
+    """JSON API to load or write a markdown file directly from the GUI editor."""
+    chosen_name = Path(input_data.filename).name
+    clean_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', chosen_name)
+    if not clean_name:
+        clean_name = "document.md"
+    if not any(clean_name.lower().endswith(ext) for ext in [".md", ".markdown", ".txt", ".lab.md"]):
+        clean_name += ".md"
+
+    base_folder = safe_resolve(input_data.target_dir or "")
+    if not base_folder.exists() or not base_folder.is_dir():
+        base_folder = CURRENT_ROOT
+
+    dest_file = base_folder / clean_name
+    try:
+        dest_file.write_text(input_data.content, encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
+
+    rel_p = get_rel_path(dest_file)
+    return {
+        "status": "success",
+        "message": f"Successfully loaded {clean_name}",
+        "filename": clean_name,
+        "path": rel_p,
+        "display_path": deid_path(dest_file),
+        "size_bytes": len(input_data.content.encode("utf-8")),
     }
 
 

@@ -97,5 +97,36 @@ export const apiService = {
       throw new Error(err.detail || `Failed to update pin configuration`);
     }
     return res.json();
+  },
+
+  async uploadFile(file: File, targetDir: string = ''): Promise<{ status: string; message: string; filename: string; path: string; display_path: string; size_bytes: number }> {
+    const base = getApiBase();
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('target_dir', targetDir);
+    const res = await fetch(`${base}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Failed to upload file');
+    }
+    return res.json();
+  },
+
+  async createFile(filename: string, content: string, targetDir: string = ''): Promise<{ status: string; message: string; filename: string; path: string; display_path: string; size_bytes: number }> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/file/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename, content, target_dir: targetDir }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Failed to create file');
+    }
+    return res.json();
   }
 };
+

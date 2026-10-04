@@ -24,7 +24,8 @@ import {
   Moon, 
   Sun, 
   Share2,
-  FileText
+  FileText,
+  UploadCloud
 } from 'lucide-react';
 import { Breadcrumb, FileData } from '../types';
 
@@ -36,6 +37,7 @@ interface HeaderProps {
   onToggleRawMode: () => void;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
+  onOpenUpload?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -101,6 +103,19 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{isRawMode ? 'Rendered View' : 'Raw View'}</span>
             </button>
           </>
+        )}
+
+        {/* Load / Upload File Button */}
+        {onOpenUpload && (
+          <button 
+            className="icon-btn" 
+            onClick={onOpenUpload} 
+            title="Load New Markdown File into GUI"
+            style={{ color: 'var(--accent-primary)', borderColor: 'var(--accent-border)' }}
+          >
+            <UploadCloud size={14} />
+            <span>Load File</span>
+          </button>
         )}
 
         {/* Dark / Light Theme Toggle */}

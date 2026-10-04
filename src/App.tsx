@@ -21,6 +21,7 @@ import { MarkdownViewer } from './components/MarkdownViewer';
 import { TableOfContents } from './components/TableOfContents';
 import { SearchModal } from './components/SearchModal';
 import { RootConfigModal } from './components/RootConfigModal';
+import { FileUploadModal } from './components/FileUploadModal';
 import { apiService } from './services/api';
 import { FileData, StatsResponse, ConfigResponse } from './types';
 import { BookOpen, Sparkles, ArrowRight, FileText } from 'lucide-react';
@@ -34,6 +35,7 @@ export const App: React.FC = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [isRootConfigOpen, setIsRootConfigOpen] = useState<boolean>(false);
+  const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
   const [bookmarks, setBookmarks] = useState<string[]>([]);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [config, setConfig] = useState<ConfigResponse | null>(null);
@@ -133,9 +135,13 @@ export const App: React.FC = () => {
     setDisplayRoot(newDisplayRoot);
     setCurrentPath('');
     setSelectedFilePath(null);
-    setFileData(null);
     window.location.hash = '';
     setRefreshTrigger(prev => prev + 1);
+  };
+
+  const handleFileUploaded = (newPath: string) => {
+    setRefreshTrigger(prev => prev + 1);
+    handleSelectFile(newPath);
   };
 
   return (
@@ -164,6 +170,7 @@ export const App: React.FC = () => {
           onToggleRawMode={() => setIsRawMode(prev => !prev)}
           theme={theme}
           onToggleTheme={handleToggleTheme}
+          onOpenUpload={() => setIsUploadOpen(true)}
         />
 
         <div className="content-body">
@@ -235,6 +242,14 @@ export const App: React.FC = () => {
         config={config}
         onRootChanged={handleRootChanged}
         onConfigUpdated={setConfig}
+      />
+
+      {/* Interactive Markdown File Upload Modal */}
+      <FileUploadModal
+        isOpen={isUploadOpen}
+        onClose={() => setIsUploadOpen(false)}
+        onFileUploaded={handleFileUploaded}
+        currentDirectory={currentPath}
       />
     </div>
   );
