@@ -67,6 +67,7 @@ This documentation suite is organized into modular engineering references:
 | **04** | [04-rolling-upgrades.md](file:///home/jpaquay/docs/04-rolling-upgrades.md) | Sequential kernel 7.0 upgrades, rolling reboot lifecycle, and 500ms liveliness monitoring results |
 | **05** | [05-services-ingress-tls.md](file:///home/jpaquay/docs/05-services-ingress-tls.md) | Deployed applications: bio portal, SRE consoles, Traefik ingress, and ACME Let's Encrypt TLS |
 | **06** | [06-operations-runbook.md](file:///home/jpaquay/docs/06-operations-runbook.md) | SRE runbook, verification procedures, failover testing, and node onboarding guide |
+| **07** | [ARCHITECTURE_REVIEW.md](file:///home/jpaquay/docs/ARCHITECTURE_REVIEW.md) | Engineering, security & architecture review of `local-md` portal engine |
 
 ---
 
