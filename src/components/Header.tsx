@@ -48,6 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleRawMode,
   theme,
   onToggleTheme,
+  onOpenUpload,
 }) => {
   const [copied, setCopied] = React.useState(false);
 
