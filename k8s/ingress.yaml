@@ -4,46 +4,27 @@ metadata:
   name: local-md-docs-ingress
   namespace: docs
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.middlewares: docs-tailscale-ip-only@kubernetescrd,docs-local-md-strip@kubernetescrd
+    ingress.kubernetes.io/ssl-redirect: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: docs-tailscale-ip-only@kubernetescrd,docs-local-docs-redirect@kubernetescrd,docs-local-docs-strip@kubernetescrd
     traefik.ingress.kubernetes.io/router.tls: "true"
 spec:
   ingressClassName: traefik
   rules:
-  - host: sweetsixty6.gannet-justitia.ts.net
-    http:
-      paths:
-      - path: /local-md
-        pathType: Prefix
-        backend:
-          service:
-            name: local-md-docs
-            port:
-              number: 80
-  - host: oci-arm-3.gannet-justitia.ts.net
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: local-md-docs
-            port:
-              number: 80
   - host: oci-arm-4.gannet-justitia.ts.net
     http:
       paths:
-      - path: /
+      - path: /local-docs
         pathType: Prefix
         backend:
           service:
             name: local-md-docs
             port:
               number: 80
-  - host: local-md.gannet-justitia.ts.net
+  - host: "100.115.101.108"
     http:
       paths:
-      - path: /
+      - path: /local-docs
         pathType: Prefix
         backend:
           service:
@@ -52,8 +33,46 @@ spec:
               number: 80
   tls:
   - hosts:
-    - sweetsixty6.gannet-justitia.ts.net
-    - oci-arm-3.gannet-justitia.ts.net
     - oci-arm-4.gannet-justitia.ts.net
-    - local-md.gannet-justitia.ts.net
-    secretName: tailscale-tls
+    - "100.115.101.108"
+    secretName: tailscale-tls-oci-arm-4
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: local-md-docs-root-redirect
+  namespace: docs
+  annotations:
+    ingress.kubernetes.io/ssl-redirect: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: docs-tailscale-ip-only@kubernetescrd,docs-root-to-localdocs@kubernetescrd
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.priority: "10"
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: oci-arm-4.gannet-justitia.ts.net
+    http:
+      paths:
+      - path: /
+        pathType: Exact
+        backend:
+          service:
+            name: local-md-docs
+            port:
+              number: 80
+  - host: "100.115.101.108"
+    http:
+      paths:
+      - path: /
+        pathType: Exact
+        backend:
+          service:
+            name: local-md-docs
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - oci-arm-4.gannet-justitia.ts.net
+    - "100.115.101.108"
+    secretName: tailscale-tls-oci-arm-4

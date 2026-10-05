@@ -13,9 +13,31 @@ spec:
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: local-md-strip
+  name: local-docs-strip
   namespace: docs
 spec:
   stripPrefix:
     prefixes:
-      - /local-md
+      - /local-docs
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: local-docs-redirect
+  namespace: docs
+spec:
+  redirectRegex:
+    permanent: true
+    regex: ^(.*)/local-docs$
+    replacement: ${1}/local-docs/
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: root-to-localdocs
+  namespace: docs
+spec:
+  redirectRegex:
+    permanent: true
+    regex: ^https?://([^/]+)/?$
+    replacement: https://${1}/local-docs/
