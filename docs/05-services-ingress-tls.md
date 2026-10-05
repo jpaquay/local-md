@@ -64,9 +64,10 @@ flowchart LR
   - `GET /api/v1/persona/jekyll` & `/hyde`: Dynamic persona engine.
   - `GET /api/v1/telemetry`: Node execution runtime telemetry.
 
-### 2. SRE Node Diagnostics Consoles (`sre-console`)
+### 2. SRE Node Diagnostics & SRE Control Consoles (`sre-console`)
 - **Namespace:** `sre-console`
 - **Scope:** Dedicated agent per node (`oci-arm-1`, `oci-arm-2`, `oci-arm-3`, `oci-arm-4`, `oci-micro-1`, `oci-micro-2`, `sweetsixty6`).
+- **Main Host URL Ingress (Control Node):** `https://sweetsixty6.gannet-justitia.ts.net/` directly routes to **SRE Control** (`sre-console-sweetsixty6`), along with `/sre-control` and `/sre`.
 - **Host Isolation:** Runs with `hostPID: true` and read-only mounts of `/host/proc`, `/host/sys`, `/host/root` to inspect CPU, memory, cgroups, and disk performance.
 - **Internal Access:** Secured over Tailscale MagicDNS (`<node>.gannet-justitia.ts.net`).
 
@@ -80,5 +81,10 @@ flowchart LR
 ### 4. Local Markdown Explorer (`local-md`)
 - **Technology:** React 19 + TypeScript + Vite frontend with FastAPI Python backend.
 - **Features:** Rich Markdown rendering, Mermaid diagram integration, live full-text search (`Cmd+K`), interactive GUI file loading, and zero-PII De-ID layer.
-- **Target Node:** Deployed to newly provisioned ARM64 nodes (`oci-arm-3` / `oci-arm-4`).
-- **Ingress Constraint:** Tailscale IP only via Traefik `ipAllowList` middleware (`100.64.0.0/10`).
+- **Deployment:** Active on ARM64 nodes `oci-arm-3` and `oci-arm-4`.
+- **Dedicated Ingress:** Restricted exclusively to **ARM4 Tailscale IP / Host** at `/local-docs`:
+  - `https://oci-arm-4.gannet-justitia.ts.net/local-docs`
+  - `https://100.115.101.108/local-docs` (Direct IP via Traefik IngressRoute)
+  - Root `/` on ARM4 automatically redirects to `/local-docs/`.
+  - Main host (`sweetsixty6`) and other nodes are stripped from this ingress.
+- **Ingress Constraint:** Protected by Traefik `tailscale-ip-only` middleware (`100.64.0.0/10`, `10.0.0.0/16`, `10.42.0.0/16`).
