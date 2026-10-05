@@ -9,3 +9,13 @@ spec:
       - 100.64.0.0/10
       - 10.0.0.0/16
       - 10.42.0.0/16
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: local-md-strip
+  namespace: docs
+spec:
+  stripPrefix:
+    prefixes:
+      - /local-md

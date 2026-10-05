@@ -5,7 +5,7 @@ metadata:
   namespace: docs
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.middlewares: docs-tailscale-ip-only@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: docs-tailscale-ip-only@kubernetescrd,docs-local-md-strip@kubernetescrd
     traefik.ingress.kubernetes.io/router.tls: "true"
 spec:
   ingressClassName: traefik

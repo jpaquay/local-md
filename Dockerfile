@@ -1,22 +1,10 @@
-# Multi-stage build for Local Markdown Explorer (local-md)
-
-# Stage 1: Build React 19 Frontend SPA
-FROM node:20-slim AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-# Stage 2: Python FastAPI Runtime
 FROM python:3.12-slim
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy built frontend assets from builder stage
-COPY --from=builder /app/dist ./dist
+COPY dist ./dist
 COPY server.py ./server.py
 COPY docs /docs
 
