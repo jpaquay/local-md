@@ -1,10 +1,10 @@
-# local-md — Agentic Engineering & Workspace Guide (`Apps/local-md`)
+# local-md — Agentic Engineering & Workspace Guide (`cloud-gtm/local-md`)
 
 | Field | Value |
 | :--- | :--- |
-| **Module / Repository** | `Apps/local-md` |
-| **Operational Zone** | `Apps/` |
-| **Git Author Identity** | `jpaquay+github@gmail.com` |
+| **Module / Repository** | `cloud-gtm/local-md` |
+| **Operational Zone** | `cloud-gtm/` |
+| **Git Author Identity** | `jpaquay@google.com` |
 | **Primary GCP Region** | `europe-west1` (Belgium) · DR `europe-west4` (Netherlands) |
 | **Preferred AI Models** | `gemini-4-argon` (Reasoning/Orchestration) · `gemini-3.8-live-avatar` (Live Avatar) |
 

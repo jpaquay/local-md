@@ -2,9 +2,9 @@
 
 | Field | Value |
 | :--- | :--- |
-| **Module** | `Apps/local-md` |
+| **Module** | `cloud-gtm/local-md` |
 | **Primary Region** | `europe-west1` |
-| **Author Identity** | `jpaquay+github@gmail.com` |
+| **Author Identity** | `jpaquay@google.com` |
 | **Last Audited** | `2026-11-04` |
 
 ---
