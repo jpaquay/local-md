@@ -20,6 +20,7 @@ strict De-ID (zero PII in API responses or configs), and Zero-Trust Proxy Guard 
 """
 
 import os
+import hmac
 import re
 import json
 import time
@@ -42,6 +43,16 @@ APP_DIR = Path(__file__).parent.resolve()
 ENV_FILE = APP_DIR / ".env"
 ENV_EXAMPLE_FILE = APP_DIR / ".env.example"
 DIST_DIR = APP_DIR / "dist"
+ADMIN_TOKEN = os.environ.get("LOCAL_MD_ADMIN_TOKEN", "").strip()
+
+
+def verify_admin_token(request: Request) -> None:
+    """Requires X-Local-Md-Token header when mutating root config or uploading files."""
+    if not ADMIN_TOKEN:
+        return
+    presented = (request.headers.get("x-local-md-token") or "").strip()
+    if not hmac.compare_digest(presented.encode("utf-8"), ADMIN_TOKEN.encode("utf-8")):
+        raise HTTPException(status_code=401, detail="Unauthorized: valid X-Local-Md-Token required")
 
 
 def get_home_dir() -> Path:
@@ -162,6 +173,7 @@ except Exception:
 
 CURRENT_ROOT: Path = DEFAULT_ROOT
 LOCKED_ROOT: bool = os.environ.get("LOCK_ROOT", "false").lower() in ("true", "1", "yes")
+STARTUP_LOCK_ENFORCED: bool = LOCKED_ROOT
 STARTUP_PINNED_ROOT: Path = CURRENT_ROOT
 
 
@@ -189,11 +201,16 @@ def get_pinned_roots_list() -> List[str]:
 
 app = FastAPI(title="Local Markdown Explorer", version="1.2.0")
 
+_allowed_origins = [
+    o.strip()
+    for o in os.environ.get("LOCAL_MD_ALLOWED_ORIGINS", "http://127.0.0.1:18000,http://localhost:18000,http://localhost:5173").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -234,14 +251,18 @@ class PinRootRequest(BaseModel):
 
 
 def safe_resolve(rel_path: str) -> Path:
-    """Resolves and validates that a relative path stays within CURRENT_ROOT."""
+    """Resolves and validates that a relative path stays within CURRENT_ROOT (including symlink realpath check)."""
     clean = rel_path.strip().lstrip("/")
-    target = (CURRENT_ROOT / clean).resolve()
+    root_real = Path(os.path.realpath(CURRENT_ROOT))
+    candidate = Path(os.path.realpath(CURRENT_ROOT / clean))
     try:
-        target.relative_to(CURRENT_ROOT)
+        candidate.relative_to(root_real)
+        if LOCKED_ROOT:
+            locked_real = Path(os.path.realpath(STARTUP_PINNED_ROOT))
+            candidate.relative_to(locked_real)
     except ValueError:
         raise HTTPException(status_code=403, detail="Access denied: path outside active root directory")
-    return target
+    return candidate
 
 
 def get_rel_path(p: Path) -> str:
@@ -382,11 +403,12 @@ def get_config():
 
 
 @app.post("/api/config/root")
-def set_root(req: SetRootRequest):
+def set_root(req: SetRootRequest, request: Request):
     """Updates the active root directory dynamically (unless locked)."""
     global CURRENT_ROOT
+    verify_admin_token(request)
     raw_path = req.root_path.strip()
-    target = resolve_user_path(raw_path)
+    target = Path(os.path.realpath(resolve_user_path(raw_path)))
 
     if not target.exists():
         raise HTTPException(status_code=404, detail=f"Target directory does not exist: {deid_path(raw_path)}")
@@ -424,10 +446,11 @@ def set_root(req: SetRootRequest):
 
 
 @app.post("/api/config/pin")
-def pin_root_config(req: PinRootRequest):
+def pin_root_config(req: PinRootRequest, request: Request):
     """Pins/unpins a directory preset, sets default startup root in .env, or toggles root lock."""
     global LOCKED_ROOT, CURRENT_ROOT, STARTUP_PINNED_ROOT
-    target = resolve_user_path(req.path) if req.path else CURRENT_ROOT
+    verify_admin_token(request)
+    target = Path(os.path.realpath(resolve_user_path(req.path))) if req.path else CURRENT_ROOT
     if not target.exists() or not target.is_dir():
         raise HTTPException(status_code=404, detail=f"Directory not found: {deid_path(req.path)}")
 
@@ -444,8 +467,17 @@ def pin_root_config(req: PinRootRequest):
             pinned = ["~/dev/cloud-gtm"]
         save_env_updates({"PINNED_ROOTS": ",".join(pinned)})
     elif req.action == "set_default":
+        if LOCKED_ROOT or STARTUP_LOCK_ENFORCED:
+            try:
+                target.relative_to(Path(os.path.realpath(STARTUP_PINNED_ROOT)))
+            except ValueError:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Cannot change default root outside locked startup root while LOCK_ROOT is active."
+                )
         CURRENT_ROOT = target
-        STARTUP_PINNED_ROOT = target
+        if not (LOCKED_ROOT or STARTUP_LOCK_ENFORCED):
+            STARTUP_PINNED_ROOT = target
         if deid_target not in pinned:
             pinned.insert(0, deid_target)
         save_env_updates({
@@ -453,6 +485,11 @@ def pin_root_config(req: PinRootRequest):
             "PINNED_ROOTS": ",".join(pinned)
         })
     elif req.action == "toggle_lock":
+        if STARTUP_LOCK_ENFORCED or os.environ.get("LOCK_ROOT", "").lower() in ("true", "1", "yes"):
+            raise HTTPException(
+                status_code=403,
+                detail="LOCK_ROOT is enforced by startup environment or --lock-root CLI flag and cannot be unlocked via API."
+            )
         LOCKED_ROOT = not LOCKED_ROOT
         if LOCKED_ROOT:
             STARTUP_PINNED_ROOT = CURRENT_ROOT
@@ -556,6 +593,9 @@ def get_file_content(path: str = Query(..., description="Relative path of file")
         raise HTTPException(status_code=404, detail="File not found")
     if target_file.is_dir():
         raise HTTPException(status_code=400, detail="Target path is a directory")
+    ext_check = target_file.suffix.lower()
+    if ext_check not in MD_EXTENSIONS and not target_file.name.endswith(".lab.md"):
+        raise HTTPException(status_code=403, detail="Access denied: only Markdown files (.md, .markdown, .lab.md) may be read")
 
     try:
         raw_text = target_file.read_text(encoding="utf-8", errors="replace")
@@ -875,8 +915,9 @@ if __name__ == "__main__":
         CURRENT_ROOT = target_root
         STARTUP_PINNED_ROOT = target_root
 
-    if args.lock_root:
+    if args.lock_root or args.pin_root:
         LOCKED_ROOT = True
+        STARTUP_LOCK_ENFORCED = True
 
     print(f"🌟 Starting Local Markdown Explorer server on http://{args.host}:{args.port}")
     print(f"📁 Active Root Directory (De-ID): {deid_path(CURRENT_ROOT)} (Locked: {LOCKED_ROOT})")

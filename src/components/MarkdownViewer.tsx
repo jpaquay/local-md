@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
 import mermaid from 'mermaid';
@@ -44,9 +44,42 @@ interface MarkdownViewerProps {
 mermaid.initialize({
   startOnLoad: false,
   theme: 'dark',
-  securityLevel: 'loose',
+  securityLevel: 'strict',
   fontFamily: 'Inter, sans-serif'
 });
+
+const BLOCKED_TAGS = new Set([
+  'script', 'iframe', 'object', 'embed', 'form', 'meta', 'link', 'base', 'applet'
+]);
+
+function sanitizeHtml(dirtyHtml: string): string {
+  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return dirtyHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  }
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(dirtyHtml, 'text/html');
+  const elements = Array.from(doc.body.querySelectorAll('*'));
+  for (const el of elements) {
+    const tag = el.tagName.toLowerCase();
+    if (BLOCKED_TAGS.has(tag)) {
+      el.remove();
+      continue;
+    }
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const val = attr.value.trim().toLowerCase();
+      if (name.startsWith('on') || name === 'srcdoc') {
+        el.removeAttribute(attr.name);
+      } else if (
+        (name === 'href' || name === 'src' || name === 'xlink:href' || name === 'action' || name === 'formaction') &&
+        (val.startsWith('javascript:') || val.startsWith('vbscript:') || val.startsWith('data:text/html'))
+      ) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  }
+  return doc.body.innerHTML;
+}
 
 export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   fileData,
@@ -109,10 +142,10 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
       '<div class="aside-box aside-negative"><div class="aside-content"><strong>$1:</strong> $2</div></div>'
     );
 
-    return transformedHtml;
+    return sanitizeHtml(transformedHtml);
   };
 
-  const htmlContent = renderMarkdownToHtml(fileData.content);
+  const htmlContent = useMemo(() => renderMarkdownToHtml(fileData.content), [fileData.content]);
 
   // Handle post-render: Syntax Highlighting, Mermaid Execution, Code Copy Buttons
   useEffect(() => {
@@ -140,7 +173,9 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
 
         const header = document.createElement('div');
         header.className = 'code-block-header';
-        header.innerHTML = `<span>${lang}</span>`;
+        const langSpan = document.createElement('span');
+        langSpan.textContent = lang;
+        header.appendChild(langSpan);
 
         const copyBtn = document.createElement('button');
         copyBtn.className = 'copy-code-btn';
